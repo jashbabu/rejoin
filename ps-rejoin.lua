@@ -15,7 +15,7 @@ local player = Players.LocalPlayer
 
 local PS_SHARE_LINK = "https://www.roblox.com/share?code=24f26a509c0fa34db33a24b1b3d6e7f0&type=Server"
 
-local INTERVAL_SECONDS = 30    -- Rejoin every 5 minutes (recommended)
+local INTERVAL_SECONDS = 300    -- Rejoin every 5 minutes (recommended)
                                  -- 180 = 3 min, 600 = 10 min, etc.
 
 local START_DELAY = 12           -- Seconds to wait after joining before starting the timer
