@@ -1,7 +1,6 @@
 -- =============================================
---  Auto Private Server Rejoin Script (2026)
---  Security Kick + WiFi Drop Handler
---  GitHub Style - Config at the top
+--  Smart Private Server Auto Rejoin (Client)
+--  Built for stability & reduced errors
 -- =============================================
 
 local TeleportService = game:GetService("TeleportService")
@@ -10,83 +9,96 @@ local CoreGui = game:GetService("CoreGui")
 
 local player = Players.LocalPlayer
 
--- ================== CONFIG ==================
--- Change these values only:
+-- ========= CONFIG =========
+local PS_LINK = "https://www.roblox.com/share?code=24f26a509c0fa34db33a24b1b3d6e7f0&type=Server"
 
-local PS_SHARE_LINK = "https://www.roblox.com/share?code=24f26a509c0fa34db33a24b1b3d6e7f0&type=Server"
+local INTERVAL = 300        -- Time between rejoins (seconds)
+local START_DELAY = 15      -- Wait after join
+local RETRY_DELAY = 8       -- Delay before fallback
+local GLOBAL_COOLDOWN = 20  -- Prevent spam attempts
+-- ==========================
 
-local INTERVAL_SECONDS = 300    -- Rejoin every 5 minutes (recommended)
-                                 -- 180 = 3 min, 600 = 10 min, etc.
+local lastTeleport = 0
+local isTeleporting = false
 
-local START_DELAY = 12           -- Seconds to wait after joining before starting the timer
--- ===========================================
+print("✅ Smart PS Rejoin Loaded")
 
--- Extract private server code
-local privateServerCode = PS_SHARE_LINK:match("code=([^&]+)")
-if not privateServerCode then
-    error("❌ Failed to extract private server code from link!")
-end
+-- ==========================
+-- Smart teleport handler
+-- ==========================
+local function smartRejoin(reason)
+    if isTeleporting then return end
 
-print("✅ Auto PS Rejoin Loaded")
-print("   Private Server Code:", privateServerCode)
-print("   Rejoin Interval:", INTERVAL_SECONDS, "seconds")
+    local now = tick()
+    if now - lastTeleport < GLOBAL_COOLDOWN then
+        print("⏳ Cooldown active, skipping teleport")
+        return
+    end
 
-local function rejoinPS()
-    print("🚀 Attempting to rejoin your private server...")
+    isTeleporting = true
+    lastTeleport = now
 
-    -- Primary method (most stable)
-    local success, err = pcall(function()
-        TeleportService:TeleportToPrivateServer(game.PlaceId, privateServerCode, {player})
+    print("🚀 Rejoin triggered | Reason:", reason or "Interval")
+
+    -- Attempt private server via link
+    local success = pcall(function()
+        TeleportService:TeleportToPrivateServerFromLink(PS_LINK, {player})
     end)
 
-    if not success then
-        warn("Primary teleport failed:", err)
+    if success then
+        print("🔗 PS link teleport requested")
+    else
+        warn("❌ PS link failed, retrying fallback soon...")
         
-        -- Fallback 1: Share link method
-        task.wait(1)
-        pcall(function()
-            TeleportService:TeleportToPrivateServerFromLink(PS_SHARE_LINK, {player})
-        end)
-        
-        -- Fallback 2: Normal game teleport
-        task.wait(2)
+        task.wait(RETRY_DELAY)
+
         pcall(function()
             TeleportService:Teleport(game.PlaceId, player)
         end)
-    else
-        print("✅ Teleport request sent successfully")
+
+        print("↩️ Fallback to public server")
     end
+
+    task.wait(5)
+    isTeleporting = false
 end
 
--- Timed rejoin loop
+-- ==========================
+-- Interval loop
+-- ==========================
 task.spawn(function()
     task.wait(START_DELAY)
+
     while true do
-        task.wait(INTERVAL_SECONDS)
-        rejoinPS()
+        task.wait(INTERVAL)
+        smartRejoin("Interval")
     end
 end)
 
--- Strong security kick detection
+-- ==========================
+-- Kick detection
+-- ==========================
 task.spawn(function()
     while true do
         task.wait(1)
-        local promptGui = CoreGui:FindFirstChild("RobloxPromptGui")
-        if promptGui and promptGui:FindFirstChild("Prompt") and promptGui.Prompt.Visible then
-            print("⚠️ Kick/Security prompt detected! Rejoining in 3 seconds...")
-            task.wait(3)
-            rejoinPS()
+
+        local gui = CoreGui:FindFirstChild("RobloxPromptGui")
+        if gui and gui:FindFirstChild("Prompt") and gui.Prompt.Visible then
+            print("⚠️ Kick detected")
+            task.wait(2)
+            smartRejoin("Kick")
         end
     end
 end)
 
--- Extra safety
+-- ==========================
+-- Player leaving fallback
+-- ==========================
 Players.PlayerRemoving:Connect(function(plr)
     if plr == player then
-        print("PlayerRemoving detected → Rejoining")
         task.wait(2)
-        rejoinPS()
+        smartRejoin("Leaving")
     end
 end)
 
-print("✅ Script is fully active with security kick protection.")
+print("✅ Script running (optimized mode)")
